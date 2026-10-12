@@ -107,6 +107,7 @@ void ggml_openvino_device_config::init() {
     static constexpr const char * env_var_names[] = {
         // String values (use ggml_openvino_getenv_str)
         "GGML_OPENVINO_DEVICE",
+        "GGML_OPENVINO_TRITON_DIR",
         "GGML_OPENVINO_CACHE_DIR",
         "GGML_OPENVINO_SPILL_DIR",
         "GGML_OPENVINO_DEBUG_NODE",
@@ -191,8 +192,17 @@ void ggml_openvino_device_config::init() {
         compile_config.insert(ov::enable_profiling(true));
     }
 
-    // Initialize remote context with queue sharing for GPU
     if (has_prefix(device_name, "GPU")) {
+        auto params = ov_singleton_core().get_default_context(device_name).get_params();
+        auto it = params.find(ov::intel_gpu::context_type.name());
+        gpu_level_zero = it != params.end() && it->second.as<ov::intel_gpu::ContextType>() == ov::intel_gpu::ContextType::ZE;
+        if (gpu_level_zero) {
+            GGML_LOG_INFO("ggml-openvino: %s runs on Level Zero, using it without a shared OpenCL context\n", device_name.c_str());
+        }
+    }
+
+    // Initialize remote context with queue sharing for GPU
+    if (has_prefix(device_name, "GPU") && !gpu_level_zero) {
         // Use the OpenCL context OpenVINO created for this device, so GPU.N gets its own device
         cl_context cl_ctx;
         try {
@@ -317,6 +327,10 @@ bool ggml_openvino_release_weights_enabled() {
 // Check if running on NPU
 bool ggml_openvino_is_npu() {
     return ggml_openvino_get_device_config().is_npu;
+}
+
+bool ggml_openvino_gpu_is_level_zero() {
+    return ggml_openvino_get_device_config().gpu_level_zero;
 }
 
 bool ggml_openvino_is_gpu() {

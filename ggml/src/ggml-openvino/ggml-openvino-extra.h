@@ -71,6 +71,8 @@ struct ggml_openvino_device_config {
     ov::AnyMap compile_config;
     std::unordered_map<std::string, std::string> environment_variables;
     cl_command_queue cl_queue = nullptr;
+    // GPU plugin built on Level Zero (GPU_RT_TYPE=ZE): no OpenCL context to share
+    bool gpu_level_zero = false;
     clEnqueueMemFillINTEL_fn cl_mem_fill_fn = nullptr;
     clEnqueueMemcpyINTEL_fn cl_mem_cpy_fn = nullptr;
 
@@ -119,6 +121,7 @@ bool ggml_openvino_is_npu();
 
 // Check if running on a GPU (GPU, GPU.0, GPU.1, ...)
 bool ggml_openvino_is_gpu();
+bool ggml_openvino_gpu_is_level_zero();
 
 // Read n_seq_active and attention_size(_swa) from the KQ mask shape (off with GGML_OPENVINO_DISABLE_SHAPE_FROM_MASK=1)
 bool ggml_openvino_shape_from_mask_enabled();
