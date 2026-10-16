@@ -14,10 +14,6 @@
 #include <openvino/op/slice.hpp>
 #include <openvino/op/sqrt.hpp>
 
-#ifdef GGML_OPENVINO_TRITON
-#    include "../../triton/triton_rms_norm.h"
-#endif
-
 namespace ov {
 namespace frontend {
 namespace ggml {
@@ -70,14 +66,6 @@ OutputVector translate_rms_norm(const NodeContext & context) {
     }
     float eps;
     memcpy(&eps, context.get_output_op_params(), sizeof(float));
-
-#ifdef GGML_OPENVINO_TRITON
-    if (auto launch = ggml_openvino_triton_rms_norm(eps)) {
-        auto res = std::make_shared<TritonRmsNorm>(input_node, eps);
-        res->get_rt_info()[ov::intel_gpu::external_op_rt_info_key] = launch;
-        return rename_outputs_with_suffix({res}, context.get_name());
-    }
-#endif
 
     auto square = std::make_shared<ov::op::v1::Multiply>(input_node, input_node);
 

@@ -78,6 +78,12 @@ GGML_OP_CONVERTER(translate_conv_3d);
 
 std::unordered_map<std::string, CreatorFunction> get_supported_ops();
 
+// Extension support. Converters contributed at runtime (see FrontEnd::add_extension) are merged into
+// get_supported_ops(), which is also what ggml-openvino's supports_op reads, so an extension op is
+// reported as supported. ensure_extensions_loaded() loads GGML_OPENVINO_EXTENSIONS once.
+void register_extension_op(const std::string & op_type, CreatorFunction converter);
+void ensure_extensions_loaded();
+
 }  // namespace ggml
 }  // namespace frontend
 }  // namespace ov

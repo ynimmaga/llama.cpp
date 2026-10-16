@@ -5,6 +5,7 @@
 #include "ggml.h"
 #include "openvino/decoder.h"
 
+
 #include <cstdint>
 #include <cstring>
 #include <map>
@@ -160,6 +161,17 @@ public:
     virtual ov::Any get_attribute(const std::string & name) const override {
         return nullptr;
         GGML_UNUSED(name);
+    }
+
+    // Exposes the node's raw op_params (int32_t[GGML_MAX_OP_PARAMS / 4]) as the attribute "op_params"
+    // (std::vector<int32_t>), so extensions can decode op-specific attributes themselves. Returns
+    // nullptr for any other name.
+    virtual ov::Any get_op_attribute(int node_idx, const std::string & name) const override {
+        if (name == "op_params") {
+            const int32_t * params = get_output_op_params(node_idx);
+            return std::vector<int32_t>(params, params + GGML_MAX_OP_PARAMS / sizeof(int32_t));
+        }
+        return nullptr;
     }
 
     virtual ov::PartialShape get_input_shape(int node_idx, const std::string & name) const override;

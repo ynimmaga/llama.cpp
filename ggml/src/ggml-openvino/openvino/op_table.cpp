@@ -2,6 +2,7 @@
 
 #include "utils.h"
 
+#include <mutex>
 #include <openvino/op/abs.hpp>
 #include <openvino/op/add.hpp>
 #include <openvino/op/ceiling.hpp>
@@ -29,9 +30,20 @@ namespace ov {
 namespace frontend {
 namespace ggml {
 
+namespace {
+std::mutex g_ext_mutex;
+std::unordered_map<std::string, CreatorFunction> g_ext_ops;
+}  // namespace
+
+void register_extension_op(const std::string & op_type, CreatorFunction converter) {
+    std::lock_guard<std::mutex> lock(g_ext_mutex);
+    g_ext_ops[op_type] = std::move(converter);
+}
+
 std::unordered_map<std::string, CreatorFunction> get_supported_ops() {
     using namespace ov::op;
-    return {
+    ensure_extensions_loaded();
+    std::unordered_map<std::string, CreatorFunction> ops = {
         {"GGML_OP_ADD",             op::translate_add                              },
         {"GGML_OP_ADD1",            op::translate_1to1_match_2_inputs<v1::Add>     },
         {"GGML_OP_ADD_ID",          op::translate_add_id                           },
@@ -115,6 +127,25 @@ std::unordered_map<std::string, CreatorFunction> get_supported_ops() {
         // solve_tri has accuracy issues on GPU
         // {"GGML_OP_SOLVE_TRI",       op::translate_solve_tri                        },
     };
+    {
+        // Extension converters override or add to the built-in table. A converter that returns an
+        // empty result declines the node and the built-in translator (if any) handles it.
+        std::lock_guard<std::mutex> lock(g_ext_mutex);
+        for (const auto & [op_type, converter] : g_ext_ops) {
+            auto it = ops.find(op_type);
+            CreatorFunction original = it != ops.end() ? it->second : CreatorFunction();
+            ops[op_type] = [converter, original, op_type](const NodeContext & context) -> OutputVector {
+                auto result = converter(context);
+                if (!result.empty()) {
+                    return result;
+                }
+                FRONT_END_GENERAL_CHECK(original, "Extension for ", op_type,
+                                        " declined this node and there is no built-in translator");
+                return original(context);
+            };
+        }
+    }
+    return ops;
 }
 
 }  // namespace ggml
